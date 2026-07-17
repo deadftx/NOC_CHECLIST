@@ -104,8 +104,23 @@ export default function ReportsPage() {
 
       checklistResults.forEach((item, index) => {
         const alarmTitle = item.alarm.DSC_COMANDO_CHECAGEM || item.alarm.dsc_regra || 'Desconhecido';
-        messageText += `Alarme ${index + 1}: ${alarmTitle}\n\n`;
-        htmlContent += `<h3 style="color: #2c3e50; margin-top: 24px;">Alarme ${index + 1}: ${alarmTitle}</h3>`;
+        const objetivo = item.alarm.DSC_OBJETIVO_TECNICO || item.alarm.dsc_objetivo_tecnico;
+        const solucionadoPor = item.alarm.DSC_SOLUCIONADO_POR || item.alarm.dsc_solucionado_por;
+
+        messageText += `Alarme ${index + 1}: ${alarmTitle}\n`;
+        htmlContent += `<h3 style="color: #2c3e50; margin-top: 24px; margin-bottom: 8px;">Alarme ${index + 1}: ${alarmTitle}</h3>`;
+
+        if (objetivo) {
+          messageText += `Objetivo: ${objetivo}\n`;
+          htmlContent += `<p style="margin: 0 0 4px 0; color: #555;"><em>Objetivo:</em> ${objetivo}</p>`;
+        }
+        
+        if (solucionadoPor && String(solucionadoPor).trim() !== '') {
+          messageText += `Solucionado Por: ${solucionadoPor}\n`;
+          htmlContent += `<p style="margin: 0 0 12px 0; color: #555;"><em>Solucionado Por:</em> ${solucionadoPor}</p>`;
+        }
+
+        messageText += `\n`;
         
         if (item.grid && item.grid.length > 0) {
           const headers = Object.keys(item.grid[0]);

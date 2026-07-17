@@ -29,6 +29,16 @@ export async function POST(req) {
       const alarmTitle = item.alarm.DSC_COMANDO_CHECAGEM || item.alarm.dsc_regra || 'Desconhecido';
       messageText += `**Alarme ${index + 1}: ${alarmTitle}**\n\n`;
       
+      const objetivo = item.alarm.DSC_OBJETIVO_TECNICO || item.alarm.dsc_objetivo_tecnico;
+      if (objetivo) {
+        messageText += `_Objetivo: ${objetivo}_\n\n`;
+      }
+      
+      const solucionadoPor = item.alarm.DSC_SOLUCIONADO_POR || item.alarm.dsc_solucionado_por;
+      if (solucionadoPor && String(solucionadoPor).trim() !== '') {
+        messageText += `_Solucionado Por: ${solucionadoPor}_\n\n`;
+      }
+      
       if (item.grid && item.grid.length > 0) {
         const headers = Object.keys(item.grid[0]);
         messageText += '| ' + headers.join(' | ') + ' |\n';

@@ -55,6 +55,31 @@ export async function POST(req) {
           grid = result.recordsets[0] || [];
         }
 
+        const MAX_ROWS = 10;
+        const MAX_STRING_LENGTH = 250; // Limite rigoroso de caracteres por célula
+
+        // Truncar strings para evitar que um campo VARCHAR(MAX) de 50MB trave o navegador
+        grid.forEach(row => {
+          Object.keys(row).forEach(k => {
+            if (typeof row[k] === 'string' && row[k].length > MAX_STRING_LENGTH) {
+              row[k] = row[k].substring(0, MAX_STRING_LENGTH) + '... [TRUNCADO]';
+            }
+          });
+        });
+
+        if (grid.length > MAX_ROWS) {
+          const totalRows = grid.length;
+          grid = grid.slice(0, MAX_ROWS);
+          
+          if (grid.length > 0) {
+            const warningRow = {};
+            const keys = Object.keys(grid[0]);
+            keys.forEach(k => warningRow[k] = "...");
+            warningRow[keys[0]] = `Resultado total: ${totalRows} linhas (+ ${totalRows - MAX_ROWS} ocultadas).`;
+            grid.push(warningRow);
+          }
+        }
+
         resultGrid = grid;
       } finally {
         await pool.close();

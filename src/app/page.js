@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState, useCallback } from 'react'
-import { RefreshCw, PlayCircle, Info, CheckCircle2 } from 'lucide-react'
+import { RefreshCw, PlayCircle, Info, CheckCircle2, Download, Copy, Check, AlertTriangle } from 'lucide-react'
 import { format } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
 import { jsPDF } from 'jspdf'
@@ -18,6 +18,10 @@ export default function Dashboard() {
   const [progress, setProgress] = useState(0)
   const [currentTask, setCurrentTask] = useState('')
   const [taskTime, setTaskTime] = useState(0)
+
+  const [lastResults, setLastResults] = useState([])
+  const [copiedAlarmId, setCopiedAlarmId] = useState(null)
+  const [generatingAlarm, setGeneratingAlarm] = useState(null)
 
   const fetchData = useCallback(async () => {
     setLoading(true)
@@ -89,6 +93,13 @@ export default function Dashboard() {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ command: comando, batchId })
           })
+          
+          if (!res.ok) {
+            const errData = await res.json().catch(() => ({ error: 'Erro desconhecido na API' }))
+            checklistResults.push({ alarm, grid: [], error: errData.error || `HTTP ${res.status}` })
+            continue;
+          }
+          
           const { data } = await res.json()
           
           checklistResults.push({
@@ -96,7 +107,7 @@ export default function Dashboard() {
             grid: data || []
           })
         } catch (error) {
-          checklistResults.push({ alarm, grid: [], error: 'Erro ao executar o comando.' })
+          checklistResults.push({ alarm, grid: [], error: error.message || 'Erro ao executar o comando.' })
         }
       } else {
         checklistResults.push({ alarm, grid: [] })
@@ -135,6 +146,15 @@ export default function Dashboard() {
       doc.text(`Alarme ${index + 1}: ${item.alarm.DSC_COMANDO_CHECAGEM || item.alarm.dsc_regra || 'Desconhecido'}`, 14, currentY)
       currentY += 8
 
+      const objetivo = item.alarm.DSC_OBJETIVO_TECNICO || item.alarm.dsc_objetivo_tecnico;
+      if (objetivo) {
+        doc.setFontSize(10)
+        doc.setFont("helvetica", "italic")
+        const splitObjetivo = doc.splitTextToSize(`Objetivo: ${objetivo}`, 180)
+        doc.text(splitObjetivo, 14, currentY)
+        currentY += (splitObjetivo.length * 5)
+      }
+
       doc.setFontSize(10)
       doc.setFont("helvetica", "normal")
       
@@ -152,7 +172,13 @@ export default function Dashboard() {
       currentY += 4
 
       // Desenhar o Grid
-      if (item.grid && item.grid.length > 0) {
+      if (item.error) {
+        doc.setFontSize(10)
+        doc.setTextColor(231, 76, 60)
+        doc.text(`Erro na execucao: ${item.error}`, 14, currentY)
+        doc.setTextColor(0, 0, 0)
+        currentY += 15
+      } else if (item.grid && item.grid.length > 0) {
         const gridKeys = Object.keys(item.grid[0])
         const gridData = item.grid.map(row => gridKeys.map(k => String(row[k])))
 
@@ -194,7 +220,204 @@ export default function Dashboard() {
       console.error('Erro ao salvar relatório no servidor', e)
     }
     
+    setLastResults(checklistResults)
     setGenerating(false)
+  }
+
+  const handleGenerateSingleChecklist = async (alarm) => {
+    setGeneratingAlarm(alarm)
+    const batchId = crypto.randomUUID()
+    const comando = alarm.DSC_COMANDO_CHECAGEM
+    let resultItem = { alarm, grid: [] }
+
+    if (comando && comando !== 'N/A') {
+      try {
+        const res = await fetch('/api/execute-check', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ command: comando, batchId })
+        })
+        
+        if (!res.ok) {
+          const errData = await res.json().catch(() => ({ error: 'Erro desconhecido na API' }))
+          resultItem.error = errData.error || `HTTP ${res.status}`
+        } else {
+          const { data } = await res.json()
+          resultItem.grid = data || []
+        }
+      } catch (error) {
+        resultItem.error = error.message || 'Erro ao executar o comando.'
+      }
+    }
+
+    setLastResults(prev => {
+      const filtered = prev.filter(r => r.alarm !== alarm)
+      return [...filtered, resultItem]
+    })
+
+    const doc = new jsPDF()
+    const dateStr = format(new Date(), "ddMM_HHmm")
+    const title = `Relatório NOC Individual (${format(new Date(), "dd/MM/yyyy HH:mm")})`
+    
+    let currentY = 15
+    doc.setFontSize(16)
+    doc.text(title, 14, currentY)
+    currentY += 15
+
+    let displayColumns = []
+    try {
+      displayColumns = JSON.parse(config.columns)
+    } catch(e) {
+      displayColumns = ['dsc_regra', 'dsc_solucao', 'DAT_ULTIMA_EXECUCAO']
+    }
+
+    doc.setFontSize(12)
+    doc.setFont("helvetica", "bold")
+    doc.text(`Alarme: ${resultItem.alarm.DSC_COMANDO_CHECAGEM || resultItem.alarm.dsc_regra || 'Desconhecido'}`, 14, currentY)
+    currentY += 8
+
+    const objetivo = resultItem.alarm.DSC_OBJETIVO_TECNICO || resultItem.alarm.dsc_objetivo_tecnico;
+    if (objetivo) {
+      doc.setFontSize(10)
+      doc.setFont("helvetica", "italic")
+      const splitObjetivo = doc.splitTextToSize(`Objetivo: ${objetivo}`, 180)
+      doc.text(splitObjetivo, 14, currentY)
+      currentY += (splitObjetivo.length * 5)
+    }
+
+    doc.setFontSize(10)
+    doc.setFont("helvetica", "normal")
+    
+    displayColumns.forEach(col => {
+      if (col !== 'dsc_regra') {
+         const val = renderCellValue(col, resultItem.alarm[col])
+         const text = `${col.replace(/_/g, ' ')}: ${val || 'N/A'}`
+         const splitText = doc.splitTextToSize(text, 180)
+         doc.text(splitText, 14, currentY)
+         currentY += (splitText.length * 5)
+      }
+    })
+    currentY += 4
+
+    if (resultItem.error) {
+      doc.setFontSize(10)
+      doc.setTextColor(231, 76, 60)
+      doc.text(`Erro na execucao: ${resultItem.error}`, 14, currentY)
+      doc.setTextColor(0, 0, 0)
+    } else if (resultItem.grid && resultItem.grid.length > 0) {
+      const gridKeys = Object.keys(resultItem.grid[0])
+      const gridData = resultItem.grid.map(row => gridKeys.map(k => String(row[k])))
+
+      autoTable(doc, {
+        startY: currentY,
+        head: [gridKeys],
+        body: gridData,
+        theme: 'grid',
+        styles: { fontSize: 8, cellPadding: 2 },
+        headStyles: { fillColor: [41, 128, 185] },
+        margin: { left: 14, right: 14 }
+      })
+    } else {
+      doc.setFontSize(9)
+      doc.setTextColor(150, 150, 150)
+      doc.text("Nenhum resultado retornado pelo grid.", 14, currentY)
+      doc.setTextColor(0, 0, 0)
+    }
+
+    const pdfFileName = `NOC_Indiv_${dateStr}.pdf`
+    
+    try {
+      const pdfDataUri = doc.output('datauristring')
+      await fetch('/api/reports', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          batchId,
+          fileName: pdfFileName,
+          fileData: pdfDataUri,
+          rawJsonData: JSON.stringify([resultItem])
+        })
+      })
+    } catch(e) {
+      console.error('Erro ao salvar relatório no servidor', e)
+    }
+
+    setGeneratingAlarm(null)
+  }
+
+  const handleGenerateErrorPDF = (result) => {
+    const doc = new jsPDF()
+    const title = `Relatorio de Erro - NOC`
+    doc.setFontSize(16)
+    doc.text(title, 14, 15)
+    
+    doc.setFontSize(12)
+    doc.setFont("helvetica", "bold")
+    doc.text(`Alarme: ${result.alarm.DSC_COMANDO_CHECAGEM || result.alarm.dsc_regra || 'Desconhecido'}`, 14, 25)
+    
+    doc.setFontSize(10)
+    doc.setFont("helvetica", "normal")
+    let currentY = 35
+    
+    // Add Alarm info
+    let columns = []
+    try {
+      columns = JSON.parse(config.columns)
+    } catch(e) {
+      columns = ['dsc_regra', 'dsc_solucao', 'DAT_ULTIMA_EXECUCAO']
+    }
+    
+    columns.forEach(col => {
+      const text = `${col.replace(/_/g, ' ')}: ${renderCellValue(col, result.alarm[col]) || 'N/A'}`
+      const splitText = doc.splitTextToSize(text, 180)
+      doc.text(splitText, 14, currentY)
+      currentY += (splitText.length * 5)
+    })
+    
+    currentY += 10
+    doc.setFontSize(11)
+    doc.setTextColor(231, 76, 60)
+    doc.setFont("helvetica", "bold")
+    doc.text("Mensagem de Erro:", 14, currentY)
+    currentY += 6
+    doc.setFont("helvetica", "normal")
+    const errorText = doc.splitTextToSize(result.error, 180)
+    doc.text(errorText, 14, currentY)
+    
+    doc.save(`Erro_NOC_${result.alarm.id || 'Unknown'}.pdf`)
+  }
+
+  const handleCopyError = async (result) => {
+    try {
+      const alarmTitle = result.alarm.DSC_COMANDO_CHECAGEM || result.alarm.dsc_regra || 'Desconhecido'
+      const objetivo = result.alarm.DSC_OBJETIVO_TECNICO || result.alarm.dsc_objetivo_tecnico
+      const solucionadoPor = result.alarm.DSC_SOLUCIONADO_POR || result.alarm.dsc_solucionado_por
+
+      let messageText = `Relatório de Erro - NOC\nAlarme: ${alarmTitle}\n`
+      if (objetivo) messageText += `Objetivo: ${objetivo}\n`
+      if (solucionadoPor && String(solucionadoPor).trim() !== '') messageText += `Solucionado Por: ${solucionadoPor}\n`
+      messageText += `Erro: ${result.error}`
+
+      let htmlContent = `
+        <div style="font-family: sans-serif;">
+          <h3 style="color: #c0392b;">Relatório de Erro - NOC</h3>
+          <p><strong>Alarme:</strong> ${alarmTitle}</p>
+      `
+      if (objetivo) htmlContent += `<p><em>Objetivo:</em> ${objetivo}</p>`
+      if (solucionadoPor && String(solucionadoPor).trim() !== '') htmlContent += `<p><em>Solucionado Por:</em> ${solucionadoPor}</p>`
+      htmlContent += `
+          <p><strong>Erro:</strong> ${result.error}</p>
+        </div>
+      `
+      const blobHtml = new Blob([htmlContent], { type: 'text/html' })
+      const blobText = new Blob([messageText], { type: 'text/plain' })
+      const data = [new ClipboardItem({ 'text/html': blobHtml, 'text/plain': blobText })]
+      await navigator.clipboard.write(data)
+      setCopiedAlarmId(result.alarm.id)
+      setTimeout(() => setCopiedAlarmId(null), 2000)
+    } catch (e) {
+      console.error('Erro ao copiar dados:', e)
+    }
   }
 
   if (loading && !config) {
@@ -277,6 +500,7 @@ export default function Dashboard() {
                 {displayColumns.map(col => (
                   <th key={col}>{col.replace(/_/g, ' ')}</th>
                 ))}
+                <th style={{ width: '250px', textAlign: 'center' }}>Ações (Status)</th>
               </tr>
             </thead>
             <tbody>
@@ -287,16 +511,51 @@ export default function Dashboard() {
                   </td>
                 </tr>
               ) : (
-                alarms.map((alarm, idx) => (
+                alarms.map((alarm, idx) => {
+                  const result = lastResults.find(r => r.alarm === alarm)
+                  return (
                   <tr key={alarm.id || idx}>
                     <td style={{ textAlign: 'center' }}>
-                      <div className="status-blinker" title="Alarme Crítico"></div>
+                      <div className={result?.error ? "status-blinker error" : "status-blinker"} title={result?.error ? "Erro de Execução" : "Alarme Crítico"} style={result?.error ? { background: 'var(--danger-color)', boxShadow: '0 0 10px var(--danger-color)' } : {}}></div>
                     </td>
                     {displayColumns.map(col => (
                       <td key={col}>{renderCellValue(col, alarm[col])}</td>
                     ))}
+                    <td style={{ textAlign: 'center' }}>
+                      <div style={{ display: 'flex', gap: '8px', justifyContent: 'center', alignItems: 'center' }}>
+                        <button 
+                          onClick={() => handleGenerateSingleChecklist(alarm)} 
+                          className="btn" 
+                          disabled={generatingAlarm === alarm || generating}
+                          style={{ padding: '4px 8px', fontSize: '0.8rem', background: 'var(--accent-color)' }} 
+                          title="Rodar NOC"
+                        >
+                          {generatingAlarm === alarm ? (
+                            <RefreshCw size={14} className="animate-spin" style={{ animation: 'spin 1s linear infinite' }} />
+                          ) : (
+                            <PlayCircle size={14} />
+                          )}
+                          Rodar
+                        </button>
+
+                        {result?.error ? (
+                          <>
+                            <button onClick={() => handleGenerateErrorPDF(result)} className="btn" style={{ padding: '4px 8px', fontSize: '0.8rem', background: 'var(--danger-color)' }} title="Baixar PDF do Erro">
+                              <Download size={14} /> PDF
+                            </button>
+                            <button onClick={() => handleCopyError(result)} className="btn" style={{ padding: '4px 8px', fontSize: '0.8rem', background: copiedAlarmId === alarm.id ? 'var(--success-color)' : 'var(--panel-border)', color: 'var(--text-primary)' }} title="Copiar Erro">
+                              {copiedAlarmId === alarm.id ? <Check size={14} /> : <Copy size={14} />}
+                            </button>
+                          </>
+                        ) : result ? (
+                          <span style={{ color: 'var(--success-color)', fontSize: '0.8rem', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '2px', marginLeft: '4px' }}>
+                            <CheckCircle2 size={14} /> OK
+                          </span>
+                        ) : null}
+                      </div>
+                    </td>
                   </tr>
-                ))
+                )})
               )}
             </tbody>
           </table>
