@@ -29,7 +29,7 @@ export async function GET() {
       };
 
       if (config.authType === 'AD') {
-        sqlConfig.driver = 'msnodesqlv8';
+        sqlConfig.driver = 'SQL Server';
         sqlConfig.options.trustedConnection = true;
       } else {
         sqlConfig.user = config.username;

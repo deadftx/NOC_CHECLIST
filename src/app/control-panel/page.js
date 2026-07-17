@@ -17,6 +17,9 @@ export default function ControlPanel() {
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
   
+  const [validating, setValidating] = useState(false)
+  const [validationResult, setValidationResult] = useState(null)
+
   const [formData, setFormData] = useState({
     name: 'Dashboard Principal',
     sourceType: 'INTERNAL',
@@ -75,6 +78,25 @@ export default function ControlPanel() {
         : [...prev.columns, col]
       return { ...prev, columns: newColumns }
     })
+  }
+
+  const handleValidate = async () => {
+    setValidating(true)
+    setValidationResult(null)
+    try {
+      const payload = { ...formData, columns: JSON.stringify(formData.columns) }
+      const res = await fetch('/api/validate-connection', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      })
+      const data = await res.json()
+      setValidationResult({ success: data.success, message: data.message || data.error })
+    } catch (error) {
+      setValidationResult({ success: false, message: 'Erro de rede ou servidor indisponível.' })
+    } finally {
+      setValidating(false)
+    }
   }
 
   const handleSave = async (e) => {
@@ -203,6 +225,18 @@ export default function ControlPanel() {
                     Logar com Usuário e Senha
                   </label>
                 </div>
+              </div>
+
+              <div style={{ marginBottom: '24px' }}>
+                <button type="button" className="btn" onClick={handleValidate} disabled={validating || !formData.serverName || !formData.dbName} style={{ background: 'var(--panel-border)', border: '1px solid var(--text-secondary)' }}>
+                  {validating ? 'Testando Conexão...' : 'Validar Conexão'}
+                </button>
+                {validationResult && (
+                  <div style={{ marginTop: '12px', padding: '12px', borderRadius: '8px', background: validationResult.success ? 'rgba(46, 204, 113, 0.1)' : 'rgba(231, 76, 60, 0.1)', color: validationResult.success ? 'var(--success-color)' : 'var(--danger-color)', fontSize: '0.9rem', border: `1px solid ${validationResult.success ? 'var(--success-color)' : 'var(--danger-color)'}` }}>
+                    {validationResult.success ? <CheckCircle size={16} style={{display:'inline', verticalAlign:'middle', marginRight:'6px'}}/> : null}
+                    <strong>{validationResult.success ? 'Sucesso: ' : 'Falha: '}</strong> {validationResult.message}
+                  </div>
+                )}
               </div>
 
               {formData.authType === 'SQL' && (

@@ -28,7 +28,7 @@ export async function POST(req) {
       };
 
       if (config.authType === 'AD') {
-        sqlConfig.driver = 'msnodesqlv8';
+        sqlConfig.driver = 'SQL Server';
         sqlConfig.options.trustedConnection = true;
       } else {
         sqlConfig.user = config.username;
