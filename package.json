@@ -9,12 +9,20 @@
     "lint": "eslint"
   },
   "dependencies": {
+    "@prisma/client": "^5.22.0",
+    "date-fns": "^4.4.0",
+    "jspdf": "^4.2.1",
+    "jspdf-autotable": "^5.0.8",
+    "lucide-react": "^1.25.0",
+    "msnodesqlv8": "^5.2.2",
+    "mssql": "^12.7.0",
     "next": "16.2.10",
     "react": "19.2.4",
     "react-dom": "19.2.4"
   },
   "devDependencies": {
     "eslint": "^9",
-    "eslint-config-next": "16.2.10"
+    "eslint-config-next": "16.2.10",
+    "prisma": "^5.22.0"
   }
 }

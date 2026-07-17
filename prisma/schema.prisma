@@ -1,0 +1,61 @@
+generator client {
+  provider = "prisma-client-js"
+  engineType = "library"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model DashboardConfig {
+  id           String   @id @default(uuid())
+  name         String
+  sourceType   String   // "INTERNAL", "SQLSERVER", "EXCEL"
+  serverName   String?
+  dbName       String?
+  query        String?
+  authType     String?  // "AD" or "SQL"
+  domain       String?
+  username     String?
+  password     String?
+  filePath     String?
+  columns      String?  // JSON stringified array of columns to show
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}
+
+model MockAlarm {
+  id                   String   @id @default(uuid())
+  dsc_regra            String
+  dsc_solucao          String
+  DSC_SOLUCIONADO_POR  String
+  DSC_COMANDO_CHECAGEM String
+  DSC_OBJETIVO_TECNICO String
+  DAT_ULTIMA_EXECUCAO  DateTime
+}
+
+model ChecklistMetric {
+  id              String   @id @default(uuid())
+  batchId         String   
+  comandoChecagem String
+  startedAt       DateTime
+  durationMs      Int
+  createdAt       DateTime @default(now())
+}
+
+model ChecklistReport {
+  id        String   @id @default(uuid())
+  batchId   String
+  fileName    String
+  filePath    String
+  rawJsonData String?
+  createdAt   DateTime @default(now())
+}
+
+model TeamsGroup {
+  id         String   @id @default(uuid())
+  name       String
+  webhookUrl String
+  createdAt  DateTime @default(now())
+}
