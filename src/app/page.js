@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState, useCallback } from 'react'
-import { RefreshCw, PlayCircle, Info, CheckCircle2, Download, Copy, Check, AlertTriangle } from 'lucide-react'
+import { RefreshCw, PlayCircle, Info, CheckCircle2, Download, Copy, Check, AlertTriangle, X } from 'lucide-react'
 import { format } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
 import { jsPDF } from 'jspdf'
@@ -22,6 +22,16 @@ export default function Dashboard() {
   const [lastResults, setLastResults] = useState([])
   const [copiedAlarmId, setCopiedAlarmId] = useState(null)
   const [generatingAlarm, setGeneratingAlarm] = useState(null)
+
+  const [showChecklistModal, setShowChecklistModal] = useState(false)
+  const [ignoredAlarms, setIgnoredAlarms] = useState([])
+
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem('ignoredNocAlarms')
+      if (saved) setIgnoredAlarms(JSON.parse(saved))
+    } catch(e) {}
+  }, [])
 
   const fetchData = useCallback(async () => {
     setLoading(true)
@@ -57,6 +67,14 @@ export default function Dashboard() {
     return () => clearInterval(timer)
   }, [generating, currentTask])
 
+  const getAlarmValue = (alarm, key) => {
+    if (!alarm || !key) return undefined;
+    if (alarm[key] !== undefined) return alarm[key];
+    if (alarm[key.toLowerCase()] !== undefined) return alarm[key.toLowerCase()];
+    if (alarm[key.toUpperCase()] !== undefined) return alarm[key.toUpperCase()];
+    return undefined;
+  }
+
   const renderCellValue = (key, value) => {
     if (key.includes('DAT_') || value instanceof Date) {
       try {
@@ -71,17 +89,26 @@ export default function Dashboard() {
   const handleGenerateChecklist = async () => {
     if (alarms.length === 0) return;
     
+    setShowChecklistModal(false)
+    
+    const alarmsToRun = alarms.filter((a, i) => {
+      const key = a.DSC_COMANDO_CHECAGEM || a.dsc_regra || String(i)
+      return !ignoredAlarms.includes(key)
+    })
+
+    if (alarmsToRun.length === 0) return;
+
     setGenerating(true)
     setProgress(0)
     
     const batchId = crypto.randomUUID()
     const checklistResults = []
 
-    for (let i = 0; i < alarms.length; i++) {
-      const alarm = alarms[i]
+    for (let i = 0; i < alarmsToRun.length; i++) {
+      const alarm = alarmsToRun[i]
       const comando = alarm.DSC_COMANDO_CHECAGEM
 
-      setProgress(Math.round((i / alarms.length) * 100))
+      setProgress(Math.round((i / alarmsToRun.length) * 100))
       
       if (comando && comando !== 'N/A') {
         setCurrentTask(`Rodando comando para: ${alarm.dsc_regra || 'Alarme ' + (i+1)}`)
@@ -447,6 +474,66 @@ export default function Dashboard() {
 
   return (
     <div className="container">
+      {showChecklistModal && (
+        <div style={{
+          position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, 
+          background: 'rgba(0,0,0,0.8)', zIndex: 999, 
+          display: 'flex', justifyContent: 'center', alignItems: 'center'
+        }}>
+          <div className="glass-panel" style={{ width: '600px', maxHeight: '80vh', display: 'flex', flexDirection: 'column' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+              <h3 style={{ color: 'var(--accent-color)' }}>Selecionar Checklists</h3>
+              <button onClick={() => setShowChecklistModal(false)} style={{ background: 'transparent', border: 'none', color: 'var(--text-secondary)', cursor: 'pointer' }}>
+                <X size={24} />
+              </button>
+            </div>
+            <p style={{ color: 'var(--text-secondary)', marginBottom: '16px' }}>
+              Desmarque os checklists que você NÃO quer rodar agora. Suas preferências ficarão salvas no navegador.
+            </p>
+            <div style={{ overflowY: 'auto', flex: 1, marginBottom: '20px', border: '1px solid var(--panel-border)', borderRadius: '8px', padding: '10px' }}>
+              {alarms.map((alarm, idx) => {
+                const key = alarm.DSC_COMANDO_CHECAGEM || alarm.dsc_regra || String(idx)
+                const isIgnored = ignoredAlarms.includes(key)
+                return (
+                  <label key={key} style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '12px 8px', cursor: 'pointer', borderBottom: '1px solid var(--panel-border)' }}>
+                    <input 
+                      type="checkbox" 
+                      checked={!isIgnored} 
+                      onChange={(e) => {
+                        const isChecked = e.target.checked
+                        let newIgnored
+                        if (isChecked) {
+                          newIgnored = ignoredAlarms.filter(id => id !== key)
+                        } else {
+                          newIgnored = [...ignoredAlarms, key]
+                        }
+                        setIgnoredAlarms(newIgnored)
+                        localStorage.setItem('ignoredNocAlarms', JSON.stringify(newIgnored))
+                      }}
+                      style={{ width: '20px', height: '20px', cursor: 'pointer' }}
+                    />
+                    <span style={{ color: isIgnored ? 'var(--text-secondary)' : 'var(--text-primary)', textDecoration: isIgnored ? 'line-through' : 'none', fontWeight: isIgnored ? 'normal' : '500' }}>
+                      {alarm.DSC_COMANDO_CHECAGEM || alarm.dsc_regra || `Alarme ${idx + 1}`}
+                    </span>
+                  </label>
+                )
+              })}
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+               <span style={{ color: 'var(--text-secondary)', fontSize: '0.9rem' }}>
+                 {alarms.filter((a, i) => !ignoredAlarms.includes(a.DSC_COMANDO_CHECAGEM || a.dsc_regra || String(i))).length} de {alarms.length} selecionados
+               </span>
+               <div style={{ display: 'flex', gap: '12px' }}>
+                 <button className="btn btn-secondary" onClick={() => setShowChecklistModal(false)}>Cancelar</button>
+                 <button className="btn" style={{ background: 'var(--success-color)' }} onClick={handleGenerateChecklist} disabled={alarms.filter((a, i) => !ignoredAlarms.includes(a.DSC_COMANDO_CHECAGEM || a.dsc_regra || String(i))).length === 0}>
+                   <PlayCircle size={18} /> GERAR
+                 </button>
+               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {generating && (
         <div style={{
           position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, 
@@ -484,7 +571,7 @@ export default function Dashboard() {
             {loading ? 'Atualizando...' : 'Atualizar Agora'}
           </button>
           
-          <button className="btn" style={{ background: 'var(--success-color)' }} onClick={handleGenerateChecklist} disabled={loading || generating || alarms.length === 0}>
+          <button className="btn" style={{ background: 'var(--success-color)' }} onClick={() => setShowChecklistModal(true)} disabled={loading || generating || alarms.length === 0}>
             <PlayCircle size={18} />
             GERAR CHECKLIST
           </button>
@@ -519,7 +606,7 @@ export default function Dashboard() {
                       <div className={result?.error ? "status-blinker error" : "status-blinker"} title={result?.error ? "Erro de Execução" : "Alarme Crítico"} style={result?.error ? { background: 'var(--danger-color)', boxShadow: '0 0 10px var(--danger-color)' } : {}}></div>
                     </td>
                     {displayColumns.map(col => (
-                      <td key={col}>{renderCellValue(col, alarm[col])}</td>
+                      <td key={col}>{renderCellValue(col, getAlarmValue(alarm, col))}</td>
                     ))}
                     <td style={{ textAlign: 'center' }}>
                       <div style={{ display: 'flex', gap: '8px', justifyContent: 'center', alignItems: 'center' }}>
