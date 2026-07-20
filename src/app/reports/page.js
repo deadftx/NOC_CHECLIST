@@ -124,13 +124,15 @@ export default function ReportsPage() {
         
         if (item.grid && item.grid.length > 0) {
           const headers = Object.keys(item.grid[0]);
+          const totalRows = item.grid.length;
+          const visibleGrid = item.grid.slice(0, 3);
           
           // Fallback de texto puro (sem formatação markdown bruta)
           messageText += headers.join(' | ') + '\n';
           
           // HTML Table Perfeita para o Teams
           htmlContent += `
-            <table style="border-collapse: collapse; width: 100%; font-size: 14px; margin-bottom: 24px;">
+            <table style="border-collapse: collapse; width: 100%; font-size: 14px; margin-bottom: 8px;">
               <thead>
                 <tr>
                   ${headers.map(h => `<th style="border: 1px solid #ddd; padding: 8px; background-color: #f8f9fa; text-align: left; font-weight: 600;">${h}</th>`).join('')}
@@ -139,7 +141,7 @@ export default function ReportsPage() {
               <tbody>
           `;
           
-          item.grid.forEach(row => {
+          visibleGrid.forEach(row => {
             messageText += headers.map(h => String(row[h] || '').replace(/\n/g, ' ')).join(' | ') + '\n';
             htmlContent += `
                 <tr>
@@ -148,8 +150,10 @@ export default function ReportsPage() {
             `;
           });
           
-          messageText += '\n';
-          htmlContent += `</tbody></table>`;
+          messageText += `Mostrando ${visibleGrid.length} de ${totalRows} resultado(s).\n\n`;
+          htmlContent += `</tbody></table>
+            <p style="margin-top: 0; font-size: 12px; color: #666; margin-bottom: 24px;">Mostrando ${visibleGrid.length} de ${totalRows} resultado(s).</p>
+          `;
         } else {
           messageText += `Nenhum resultado retornado pelo grid.\n\n`;
           htmlContent += `<p style="color: #888;"><em>Nenhum resultado retornado pelo grid.</em></p>`;

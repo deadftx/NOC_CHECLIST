@@ -30,7 +30,7 @@ export default function Dashboard() {
     try {
       const saved = localStorage.getItem('ignoredNocAlarms')
       if (saved) setIgnoredAlarms(JSON.parse(saved))
-    } catch(e) {}
+    } catch (e) { }
   }, [])
 
   const fetchData = useCallback(async () => {
@@ -41,8 +41,20 @@ export default function Dashboard() {
       setConfig(configData)
 
       const alarmsRes = await fetch('/api/alarms')
-      const alarmsData = await alarmsRes.json()
-      setAlarms(Array.isArray(alarmsData) ? alarmsData : [])
+      let alarmsData = await alarmsRes.json()
+
+      if (Array.isArray(alarmsData)) {
+        alarmsData.sort((a, b) => {
+          const nameA = (a.DSC_COMANDO_CHECAGEM || '').toString().toUpperCase()
+          const nameB = (b.DSC_COMANDO_CHECAGEM || '').toString().toUpperCase()
+          if (nameA < nameB) return -1
+          if (nameA > nameB) return 1
+          return 0
+        })
+        setAlarms(alarmsData)
+      } else {
+        setAlarms([])
+      }
       setLastUpdate(new Date())
     } catch (error) {
       console.error('Erro ao buscar dados:', error)
@@ -88,9 +100,9 @@ export default function Dashboard() {
 
   const handleGenerateChecklist = async () => {
     if (alarms.length === 0) return;
-    
+
     setShowChecklistModal(false)
-    
+
     const alarmsToRun = alarms.filter((a, i) => {
       const key = a.DSC_COMANDO_CHECAGEM || a.dsc_regra || String(i)
       return !ignoredAlarms.includes(key)
@@ -100,7 +112,7 @@ export default function Dashboard() {
 
     setGenerating(true)
     setProgress(0)
-    
+
     const batchId = crypto.randomUUID()
     const checklistResults = []
 
@@ -109,9 +121,9 @@ export default function Dashboard() {
       const comando = alarm.DSC_COMANDO_CHECAGEM
 
       setProgress(Math.round((i / alarmsToRun.length) * 100))
-      
+
       if (comando && comando !== 'N/A') {
-        setCurrentTask(`Rodando comando para: ${alarm.dsc_regra || 'Alarme ' + (i+1)}`)
+        setCurrentTask(`Rodando comando para: ${alarm.dsc_regra || 'Alarme ' + (i + 1)}`)
         setTaskTime(0)
 
         try {
@@ -120,15 +132,15 @@ export default function Dashboard() {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ command: comando, batchId })
           })
-          
+
           if (!res.ok) {
             const errData = await res.json().catch(() => ({ error: 'Erro desconhecido na API' }))
             checklistResults.push({ alarm, grid: [], error: errData.error || `HTTP ${res.status}` })
             continue;
           }
-          
+
           const { data } = await res.json()
-          
+
           checklistResults.push({
             alarm,
             grid: data || []
@@ -148,7 +160,7 @@ export default function Dashboard() {
     const doc = new jsPDF()
     const dateStr = format(new Date(), "ddMM_HHmm")
     const title = `Relatório NOC - Checklist (${format(new Date(), "dd/MM/yyyy HH:mm")})`
-    
+
     let currentY = 15
     doc.setFontSize(16)
     doc.text(title, 14, currentY)
@@ -157,7 +169,7 @@ export default function Dashboard() {
     let displayColumns = []
     try {
       displayColumns = JSON.parse(config.columns)
-    } catch(e) {
+    } catch (e) {
       displayColumns = ['dsc_regra', 'dsc_solucao', 'DAT_ULTIMA_EXECUCAO']
     }
 
@@ -184,16 +196,16 @@ export default function Dashboard() {
 
       doc.setFontSize(10)
       doc.setFont("helvetica", "normal")
-      
+
       displayColumns.forEach(col => {
         if (col !== 'dsc_regra') {
-           const val = renderCellValue(col, item.alarm[col])
-           const text = `${col.replace(/_/g, ' ')}: ${val || 'N/A'}`
-           
-           // Quebra de linha se o texto for muito longo
-           const splitText = doc.splitTextToSize(text, 180)
-           doc.text(splitText, 14, currentY)
-           currentY += (splitText.length * 5)
+          const val = renderCellValue(col, item.alarm[col])
+          const text = `${col.replace(/_/g, ' ')}: ${val || 'N/A'}`
+
+          // Quebra de linha se o texto for muito longo
+          const splitText = doc.splitTextToSize(text, 180)
+          doc.text(splitText, 14, currentY)
+          currentY += (splitText.length * 5)
         }
       })
       currentY += 4
@@ -207,7 +219,9 @@ export default function Dashboard() {
         currentY += 15
       } else if (item.grid && item.grid.length > 0) {
         const gridKeys = Object.keys(item.grid[0])
-        const gridData = item.grid.map(row => gridKeys.map(k => String(row[k])))
+        const totalRows = item.grid.length;
+        const visibleGrid = item.grid.slice(0, 3);
+        const gridData = visibleGrid.map(row => gridKeys.map(k => String(row[k])))
 
         autoTable(doc, {
           startY: currentY,
@@ -218,7 +232,13 @@ export default function Dashboard() {
           headStyles: { fillColor: [41, 128, 185] },
           margin: { left: 14, right: 14 }
         })
-        currentY = doc.lastAutoTable.finalY + 15
+        currentY = doc.lastAutoTable.finalY + 5;
+
+        doc.setFontSize(9)
+        doc.setTextColor(100, 100, 100)
+        doc.text(`Mostrando ${visibleGrid.length} de ${totalRows} resultado(s).`, 14, currentY)
+        doc.setTextColor(0, 0, 0)
+        currentY += 10
       } else {
         doc.setFontSize(9)
         doc.setTextColor(150, 150, 150)
@@ -230,7 +250,7 @@ export default function Dashboard() {
 
     const pdfFileName = `NOC_${dateStr}.pdf`
     doc.save(pdfFileName)
-    
+
     try {
       const pdfDataUri = doc.output('datauristring')
       await fetch('/api/reports', {
@@ -243,10 +263,10 @@ export default function Dashboard() {
           rawJsonData: JSON.stringify(checklistResults)
         })
       })
-    } catch(e) {
+    } catch (e) {
       console.error('Erro ao salvar relatório no servidor', e)
     }
-    
+
     setLastResults(checklistResults)
     setGenerating(false)
   }
@@ -264,7 +284,7 @@ export default function Dashboard() {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ command: comando, batchId })
         })
-        
+
         if (!res.ok) {
           const errData = await res.json().catch(() => ({ error: 'Erro desconhecido na API' }))
           resultItem.error = errData.error || `HTTP ${res.status}`
@@ -285,7 +305,7 @@ export default function Dashboard() {
     const doc = new jsPDF()
     const dateStr = format(new Date(), "ddMM_HHmm")
     const title = `Relatório NOC Individual (${format(new Date(), "dd/MM/yyyy HH:mm")})`
-    
+
     let currentY = 15
     doc.setFontSize(16)
     doc.text(title, 14, currentY)
@@ -294,7 +314,7 @@ export default function Dashboard() {
     let displayColumns = []
     try {
       displayColumns = JSON.parse(config.columns)
-    } catch(e) {
+    } catch (e) {
       displayColumns = ['dsc_regra', 'dsc_solucao', 'DAT_ULTIMA_EXECUCAO']
     }
 
@@ -314,14 +334,14 @@ export default function Dashboard() {
 
     doc.setFontSize(10)
     doc.setFont("helvetica", "normal")
-    
+
     displayColumns.forEach(col => {
       if (col !== 'dsc_regra') {
-         const val = renderCellValue(col, resultItem.alarm[col])
-         const text = `${col.replace(/_/g, ' ')}: ${val || 'N/A'}`
-         const splitText = doc.splitTextToSize(text, 180)
-         doc.text(splitText, 14, currentY)
-         currentY += (splitText.length * 5)
+        const val = renderCellValue(col, resultItem.alarm[col])
+        const text = `${col.replace(/_/g, ' ')}: ${val || 'N/A'}`
+        const splitText = doc.splitTextToSize(text, 180)
+        doc.text(splitText, 14, currentY)
+        currentY += (splitText.length * 5)
       }
     })
     currentY += 4
@@ -333,7 +353,9 @@ export default function Dashboard() {
       doc.setTextColor(0, 0, 0)
     } else if (resultItem.grid && resultItem.grid.length > 0) {
       const gridKeys = Object.keys(resultItem.grid[0])
-      const gridData = resultItem.grid.map(row => gridKeys.map(k => String(row[k])))
+      const totalRows = resultItem.grid.length;
+      const visibleGrid = resultItem.grid.slice(0, 3);
+      const gridData = visibleGrid.map(row => gridKeys.map(k => String(row[k])))
 
       autoTable(doc, {
         startY: currentY,
@@ -344,6 +366,12 @@ export default function Dashboard() {
         headStyles: { fillColor: [41, 128, 185] },
         margin: { left: 14, right: 14 }
       })
+      currentY = doc.lastAutoTable.finalY + 5;
+
+      doc.setFontSize(9)
+      doc.setTextColor(100, 100, 100)
+      doc.text(`Mostrando ${visibleGrid.length} de ${totalRows} resultado(s).`, 14, currentY)
+      doc.setTextColor(0, 0, 0)
     } else {
       doc.setFontSize(9)
       doc.setTextColor(150, 150, 150)
@@ -352,7 +380,7 @@ export default function Dashboard() {
     }
 
     const pdfFileName = `NOC_Indiv_${dateStr}.pdf`
-    
+
     try {
       const pdfDataUri = doc.output('datauristring')
       await fetch('/api/reports', {
@@ -365,7 +393,7 @@ export default function Dashboard() {
           rawJsonData: JSON.stringify([resultItem])
         })
       })
-    } catch(e) {
+    } catch (e) {
       console.error('Erro ao salvar relatório no servidor', e)
     }
 
@@ -377,30 +405,30 @@ export default function Dashboard() {
     const title = `Relatorio de Erro - NOC`
     doc.setFontSize(16)
     doc.text(title, 14, 15)
-    
+
     doc.setFontSize(12)
     doc.setFont("helvetica", "bold")
     doc.text(`Alarme: ${result.alarm.DSC_COMANDO_CHECAGEM || result.alarm.dsc_regra || 'Desconhecido'}`, 14, 25)
-    
+
     doc.setFontSize(10)
     doc.setFont("helvetica", "normal")
     let currentY = 35
-    
+
     // Add Alarm info
     let columns = []
     try {
       columns = JSON.parse(config.columns)
-    } catch(e) {
+    } catch (e) {
       columns = ['dsc_regra', 'dsc_solucao', 'DAT_ULTIMA_EXECUCAO']
     }
-    
+
     columns.forEach(col => {
       const text = `${col.replace(/_/g, ' ')}: ${renderCellValue(col, result.alarm[col]) || 'N/A'}`
       const splitText = doc.splitTextToSize(text, 180)
       doc.text(splitText, 14, currentY)
       currentY += (splitText.length * 5)
     })
-    
+
     currentY += 10
     doc.setFontSize(11)
     doc.setTextColor(231, 76, 60)
@@ -410,7 +438,7 @@ export default function Dashboard() {
     doc.setFont("helvetica", "normal")
     const errorText = doc.splitTextToSize(result.error, 180)
     doc.text(errorText, 14, currentY)
-    
+
     doc.save(`Erro_NOC_${result.alarm.id || 'Unknown'}.pdf`)
   }
 
@@ -468,7 +496,7 @@ export default function Dashboard() {
   let displayColumns = []
   try {
     displayColumns = JSON.parse(config.columns)
-  } catch(e) {
+  } catch (e) {
     displayColumns = ['dsc_regra', 'dsc_solucao', 'DAT_ULTIMA_EXECUCAO']
   }
 
@@ -476,8 +504,8 @@ export default function Dashboard() {
     <div className="container">
       {showChecklistModal && (
         <div style={{
-          position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, 
-          background: 'rgba(0,0,0,0.8)', zIndex: 999, 
+          position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+          background: 'rgba(0,0,0,0.8)', zIndex: 999,
           display: 'flex', justifyContent: 'center', alignItems: 'center'
         }}>
           <div className="glass-panel" style={{ width: '600px', maxHeight: '80vh', display: 'flex', flexDirection: 'column' }}>
@@ -496,9 +524,9 @@ export default function Dashboard() {
                 const isIgnored = ignoredAlarms.includes(key)
                 return (
                   <label key={key} style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '12px 8px', cursor: 'pointer', borderBottom: '1px solid var(--panel-border)' }}>
-                    <input 
-                      type="checkbox" 
-                      checked={!isIgnored} 
+                    <input
+                      type="checkbox"
+                      checked={!isIgnored}
                       onChange={(e) => {
                         const isChecked = e.target.checked
                         let newIgnored
@@ -520,15 +548,15 @@ export default function Dashboard() {
               })}
             </div>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-               <span style={{ color: 'var(--text-secondary)', fontSize: '0.9rem' }}>
-                 {alarms.filter((a, i) => !ignoredAlarms.includes(a.DSC_COMANDO_CHECAGEM || a.dsc_regra || String(i))).length} de {alarms.length} selecionados
-               </span>
-               <div style={{ display: 'flex', gap: '12px' }}>
-                 <button className="btn btn-secondary" onClick={() => setShowChecklistModal(false)}>Cancelar</button>
-                 <button className="btn" style={{ background: 'var(--success-color)' }} onClick={handleGenerateChecklist} disabled={alarms.filter((a, i) => !ignoredAlarms.includes(a.DSC_COMANDO_CHECAGEM || a.dsc_regra || String(i))).length === 0}>
-                   <PlayCircle size={18} /> GERAR
-                 </button>
-               </div>
+              <span style={{ color: 'var(--text-secondary)', fontSize: '0.9rem' }}>
+                {alarms.filter((a, i) => !ignoredAlarms.includes(a.DSC_COMANDO_CHECAGEM || a.dsc_regra || String(i))).length} de {alarms.length} selecionados
+              </span>
+              <div style={{ display: 'flex', gap: '12px' }}>
+                <button className="btn btn-secondary" onClick={() => setShowChecklistModal(false)}>Cancelar</button>
+                <button className="btn" style={{ background: 'var(--success-color)' }} onClick={handleGenerateChecklist} disabled={alarms.filter((a, i) => !ignoredAlarms.includes(a.DSC_COMANDO_CHECAGEM || a.dsc_regra || String(i))).length === 0}>
+                  <PlayCircle size={18} /> GERAR
+                </button>
+              </div>
             </div>
           </div>
         </div>
@@ -536,8 +564,8 @@ export default function Dashboard() {
 
       {generating && (
         <div style={{
-          position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, 
-          background: 'rgba(0,0,0,0.8)', zIndex: 999, 
+          position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+          background: 'rgba(0,0,0,0.8)', zIndex: 999,
           display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center'
         }}>
           <div className="glass-panel" style={{ width: '400px', textAlign: 'center' }}>
@@ -570,7 +598,7 @@ export default function Dashboard() {
             <RefreshCw size={18} className={loading ? "animate-spin" : ""} style={{ animation: loading ? 'spin 1s linear infinite' : 'none' }} />
             {loading ? 'Atualizando...' : 'Atualizar Agora'}
           </button>
-          
+
           <button className="btn" style={{ background: 'var(--success-color)' }} onClick={() => setShowChecklistModal(true)} disabled={loading || generating || alarms.length === 0}>
             <PlayCircle size={18} />
             GERAR CHECKLIST
@@ -601,48 +629,49 @@ export default function Dashboard() {
                 alarms.map((alarm, idx) => {
                   const result = lastResults.find(r => r.alarm === alarm)
                   return (
-                  <tr key={alarm.id || idx}>
-                    <td style={{ textAlign: 'center' }}>
-                      <div className={result?.error ? "status-blinker error" : "status-blinker"} title={result?.error ? "Erro de Execução" : "Alarme Crítico"} style={result?.error ? { background: 'var(--danger-color)', boxShadow: '0 0 10px var(--danger-color)' } : {}}></div>
-                    </td>
-                    {displayColumns.map(col => (
-                      <td key={col}>{renderCellValue(col, getAlarmValue(alarm, col))}</td>
-                    ))}
-                    <td style={{ textAlign: 'center' }}>
-                      <div style={{ display: 'flex', gap: '8px', justifyContent: 'center', alignItems: 'center' }}>
-                        <button 
-                          onClick={() => handleGenerateSingleChecklist(alarm)} 
-                          className="btn" 
-                          disabled={generatingAlarm === alarm || generating}
-                          style={{ padding: '4px 8px', fontSize: '0.8rem', background: 'var(--accent-color)' }} 
-                          title="Rodar NOC"
-                        >
-                          {generatingAlarm === alarm ? (
-                            <RefreshCw size={14} className="animate-spin" style={{ animation: 'spin 1s linear infinite' }} />
-                          ) : (
-                            <PlayCircle size={14} />
-                          )}
-                          Rodar
-                        </button>
+                    <tr key={alarm.id || idx}>
+                      <td style={{ textAlign: 'center' }}>
+                        <div className={result?.error ? "status-blinker error" : "status-blinker"} title={result?.error ? "Erro de Execução" : "Alarme Crítico"} style={result?.error ? { background: 'var(--danger-color)', boxShadow: '0 0 10px var(--danger-color)' } : {}}></div>
+                      </td>
+                      {displayColumns.map(col => (
+                        <td key={col}>{renderCellValue(col, getAlarmValue(alarm, col))}</td>
+                      ))}
+                      <td style={{ textAlign: 'center' }}>
+                        <div style={{ display: 'flex', gap: '8px', justifyContent: 'center', alignItems: 'center' }}>
+                          <button
+                            onClick={() => handleGenerateSingleChecklist(alarm)}
+                            className="btn"
+                            disabled={generatingAlarm === alarm || generating}
+                            style={{ padding: '4px 8px', fontSize: '0.8rem', background: 'var(--accent-color)' }}
+                            title="Rodar NOC"
+                          >
+                            {generatingAlarm === alarm ? (
+                              <RefreshCw size={14} className="animate-spin" style={{ animation: 'spin 1s linear infinite' }} />
+                            ) : (
+                              <PlayCircle size={14} />
+                            )}
+                            Rodar
+                          </button>
 
-                        {result?.error ? (
-                          <>
-                            <button onClick={() => handleGenerateErrorPDF(result)} className="btn" style={{ padding: '4px 8px', fontSize: '0.8rem', background: 'var(--danger-color)' }} title="Baixar PDF do Erro">
-                              <Download size={14} /> PDF
-                            </button>
-                            <button onClick={() => handleCopyError(result)} className="btn" style={{ padding: '4px 8px', fontSize: '0.8rem', background: copiedAlarmId === alarm.id ? 'var(--success-color)' : 'var(--panel-border)', color: 'var(--text-primary)' }} title="Copiar Erro">
-                              {copiedAlarmId === alarm.id ? <Check size={14} /> : <Copy size={14} />}
-                            </button>
-                          </>
-                        ) : result ? (
-                          <span style={{ color: 'var(--success-color)', fontSize: '0.8rem', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '2px', marginLeft: '4px' }}>
-                            <CheckCircle2 size={14} /> OK
-                          </span>
-                        ) : null}
-                      </div>
-                    </td>
-                  </tr>
-                )})
+                          {result?.error ? (
+                            <>
+                              <button onClick={() => handleGenerateErrorPDF(result)} className="btn" style={{ padding: '4px 8px', fontSize: '0.8rem', background: 'var(--danger-color)' }} title="Baixar PDF do Erro">
+                                <Download size={14} /> PDF
+                              </button>
+                              <button onClick={() => handleCopyError(result)} className="btn" style={{ padding: '4px 8px', fontSize: '0.8rem', background: copiedAlarmId === alarm.id ? 'var(--success-color)' : 'var(--panel-border)', color: 'var(--text-primary)' }} title="Copiar Erro">
+                                {copiedAlarmId === alarm.id ? <Check size={14} /> : <Copy size={14} />}
+                              </button>
+                            </>
+                          ) : result ? (
+                            <span style={{ color: 'var(--success-color)', fontSize: '0.8rem', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '2px', marginLeft: '4px' }}>
+                              <CheckCircle2 size={14} /> OK
+                            </span>
+                          ) : null}
+                        </div>
+                      </td>
+                    </tr>
+                  )
+                })
               )}
             </tbody>
           </table>

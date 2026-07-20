@@ -21,6 +21,7 @@ export async function POST(req) {
       const sqlConfig = {
         server: config.serverName,
         database: config.dbName,
+        requestTimeout: 120000, // 2 minutos (120000 ms)
         options: {
           encrypt: false,
           trustServerCertificate: true
