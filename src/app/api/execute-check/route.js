@@ -49,6 +49,9 @@ export async function POST(req) {
           commandText = `EXEC ${commandText}`;
         }
 
+        // Garantir NOLOCK em todas as tabelas lidas para não indisponibilizar a base
+        commandText = `SET TRANSACTION ISOLATION LEVEL READ UNCOMMITTED;\n${commandText}`;
+
         const result = await pool.request().query(commandText);
         
         let grid = result.recordset || [];

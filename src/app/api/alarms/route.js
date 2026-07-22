@@ -49,6 +49,9 @@ export async function GET() {
           commandText = `EXEC ${commandText}`;
         }
         
+        // Garantir NOLOCK em todas as tabelas lidas para não indisponibilizar a base
+        commandText = `SET TRANSACTION ISOLATION LEVEL READ UNCOMMITTED;\n${commandText}`;
+
         const result = await pool.request().query(commandText);
         
         // Pode ser que a proc retorne múltiplos recordsets e o grid esteja no primeiro
