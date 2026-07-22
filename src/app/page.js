@@ -58,6 +58,46 @@ export default function CentralDeApps() {
           </div>
         </Link>
 
+        {/* App: Leitor de Retorno */}
+        <Link href="/leitor-retorno" style={{ textDecoration: 'none' }}>
+          <div className="glass-panel app-card" style={{ height: '100%', display: 'flex', flexDirection: 'column', transition: 'all 0.3s ease', cursor: 'pointer', position: 'relative', overflow: 'hidden' }}>
+            <div style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '4px', background: 'var(--warning-color)' }}></div>
+            <div style={{ display: 'flex', alignItems: 'center', marginBottom: '24px' }}>
+              <div style={{ background: 'rgba(245, 158, 11, 0.1)', padding: '16px', borderRadius: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center', marginRight: '20px' }}>
+                <Activity size={40} color="var(--warning-color)" />
+              </div>
+              <h2 style={{ color: 'var(--text-primary)', fontSize: '1.8rem', fontWeight: 600 }}>Leitor CNAB 400</h2>
+            </div>
+            <p style={{ color: 'var(--text-secondary)', fontSize: '1.05rem', lineHeight: '1.6', flex: 1 }}>
+              Leia arquivos de retorno bancário (Bradesco) de forma instantânea. Visualize ocorrências, tarifas e valores pagos sem precisar de conexão com banco de dados.
+            </p>
+            <div style={{ marginTop: '24px', display: 'flex', alignItems: 'center', color: 'var(--warning-color)', fontWeight: 600, gap: '8px' }}>
+              <span>Acessar Ferramenta</span>
+              <ArrowRight size={18} />
+            </div>
+          </div>
+        </Link>
+
+        {/* App: Monitor de Jobs */}
+        <Link href="/jobs" style={{ textDecoration: 'none' }}>
+          <div className="glass-panel app-card" style={{ height: '100%', display: 'flex', flexDirection: 'column', transition: 'all 0.3s ease', cursor: 'pointer', position: 'relative', overflow: 'hidden' }}>
+            <div style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '4px', background: '#a855f7' }}></div>
+            <div style={{ display: 'flex', alignItems: 'center', marginBottom: '24px' }}>
+              <div style={{ background: 'rgba(168, 85, 247, 0.1)', padding: '16px', borderRadius: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center', marginRight: '20px' }}>
+                <Activity size={40} color="#a855f7" />
+              </div>
+              <h2 style={{ color: 'var(--text-primary)', fontSize: '1.8rem', fontWeight: 600 }}>Monitor de Jobs</h2>
+            </div>
+            <p style={{ color: 'var(--text-secondary)', fontSize: '1.05rem', lineHeight: '1.6', flex: 1 }}>
+              Adicione múltiplos servidores e acompanhe os jobs do SQL Server Agent em tempo real. Identifique falhas, atrasos e execuções ativas.
+            </p>
+            <div style={{ marginTop: '24px', display: 'flex', alignItems: 'center', color: '#a855f7', fontWeight: 600, gap: '8px' }}>
+              <span>Acessar Ferramenta</span>
+              <ArrowRight size={18} />
+            </div>
+          </div>
+        </Link>
+
       </div>
 
       <style jsx>{`

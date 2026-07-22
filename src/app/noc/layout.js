@@ -15,7 +15,7 @@ export default function NocLayout({ children }) {
             <Activity className="status-blinker" style={{ margin: 0 }} size={20} />
             <span style={{ marginLeft: '12px' }}>NOC Control Center</span>
           </h1>
-          <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', marginLeft: '32px', marginTop: '-4px' }}>v1.0.7</span>
+          <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', marginLeft: '32px', marginTop: '-4px' }}>v1.0.19</span>
         </div>
         <div className="nav-links">
           <Link href="/">
